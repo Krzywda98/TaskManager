@@ -2,18 +2,38 @@ package com.example.taskmanager.model;
 
 import com.example.taskmanager.model.enums.TaskPriority;
 import com.example.taskmanager.model.enums.TaskStatus;
+import jakarta.persistence.*;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 
+
+@Entity
+@Table(name = "tasks")
 public class Task {
+
+    @Id
+    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
+
+    @Column(unique = true)
     private String title;
+
+    @Column(nullable = false)
     private String description;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private TaskStatus status;
+
+    @Enumerated(EnumType.STRING)
+    @Column(nullable = false)
     private TaskPriority priority;
+
     private LocalDate deadline;
+
     private LocalDateTime createdAt;
+
     private LocalDateTime updatedAt;
 
     public Task() {
