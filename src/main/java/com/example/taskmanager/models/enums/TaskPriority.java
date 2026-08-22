@@ -1,4 +1,4 @@
-package com.example.taskmanager.model.enums;
+package com.example.taskmanager.models.enums;
 
 public enum TaskPriority {
     HIGH,
