@@ -1,13 +1,12 @@
 package com.example.taskmanager.models;
 
-import jakarta.persistence.Column;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
-import jakarta.persistence.Id;
+import jakarta.persistence.*;
 
-
+import javax.management.relation.Role;
 import java.time.LocalDateTime;
 
+@Entity
+@Table(name="users")
 public class User {
 
     @Id
@@ -26,8 +25,15 @@ public class User {
     @Column(nullable = false, unique = true)
     private String password;
 
+    @Enumerated(EnumType.STRING)
+    private Role role;
+
 
     private LocalDateTime joinDate;
+
+    public User() {
+
+    }
 
 
 
