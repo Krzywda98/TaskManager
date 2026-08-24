@@ -42,7 +42,6 @@ public class TaskService {
         existingTask.setStatus(updatedTask.getStatus());
         existingTask.setPriority(updatedTask.getPriority());
         existingTask.setDeadline(updatedTask.getDeadline());
-        existingTask.setUpdatedAt(LocalDateTime.now());
 
         return taskRepository.save(existingTask);
 

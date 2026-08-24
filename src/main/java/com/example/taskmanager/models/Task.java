@@ -39,6 +39,17 @@ public class Task {
     public Task() {
     }
 
+    @PrePersist
+    public void onCreate() {
+        createdAt = LocalDateTime.now();
+        updatedAt = LocalDateTime.now();
+    }
+
+    @PreUpdate
+    public void onUpdate() {
+        updatedAt = LocalDateTime.now();
+    }
+
 
     public Long getId() {
         return id;
