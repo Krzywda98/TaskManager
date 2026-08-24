@@ -3,6 +3,10 @@ package com.example.taskmanager.models;
 import com.example.taskmanager.models.enums.TaskPriority;
 import com.example.taskmanager.models.enums.TaskStatus;
 import jakarta.persistence.*;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
+
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -16,16 +20,22 @@ public class Task {
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
-    @Column(unique = true)
+    @NotBlank
+    @Size(min = 1, max = 100)
+    @Column(unique = true,  nullable = false)
     private String title;
 
+    @NotBlank
+    @Size(max = 500)
     @Column(nullable = false)
     private String description;
 
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TaskStatus status;
 
+    @NotNull
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     private TaskPriority priority;
