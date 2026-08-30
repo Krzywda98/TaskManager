@@ -26,6 +26,12 @@ public class UserController {
         return userService.getUserById(id);
     }
 
+    @GetMapping
+    public Optional<User> getUserByEmail(@RequestParam String email){
+        return userService.getUserByEmail(email);
+
+    }
+
     @PostMapping
     public void createUser(@RequestBody User user) {
         userService.createUser(user);
