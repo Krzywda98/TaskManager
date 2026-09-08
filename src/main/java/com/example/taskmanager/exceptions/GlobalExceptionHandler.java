@@ -11,4 +11,9 @@ public class GlobalExceptionHandler{
     public ResponseEntity<String> handleTaskNotFoundException(TaskNotFoundException ex){
         return ResponseEntity.status(HttpStatus.NOT_FOUND).body(ex.getMessage());
     }
+
+    @ExceptionHandler(EmailAlreadyExistException.class)
+    public ResponseEntity<String> handleEmailAlreadyExistException(EmailAlreadyExistException ex){
+        return ResponseEntity.status(HttpStatus.CONFLICT).body(ex.getMessage());
+    }
 }
