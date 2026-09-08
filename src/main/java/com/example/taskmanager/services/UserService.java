@@ -2,6 +2,8 @@ package com.example.taskmanager.services;
 
 
 import com.example.taskmanager.models.User;
+import com.example.taskmanager.models.dto.RegisterUserRequest;
+import com.example.taskmanager.models.enums.Role;
 import com.example.taskmanager.repositories.UserRepository;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -32,9 +34,15 @@ public class UserService {
         return userRepository.findByEmail(email);
     }
 
-    public User createUser( User user) {
-        user.setPassword(passwordEncoder.encode(user.getPassword()));
+    public User createUser(RegisterUserRequest request) {
+        User user = new User();
+        user.setName(request.getName());
+        user.setSurname(request.getSurname());
+        user.setEmail(request.getEmail());
+        user.setPassword(passwordEncoder.encode(request.getPassword()));
+        user.setRole(Role.USER);
         return userRepository.save(user);
+
     }
 
     public User updateUser(Long id, User user) {

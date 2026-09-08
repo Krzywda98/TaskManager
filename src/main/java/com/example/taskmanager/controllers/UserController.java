@@ -2,7 +2,9 @@ package com.example.taskmanager.controllers;
 
 
 import com.example.taskmanager.models.User;
+import com.example.taskmanager.models.dto.RegisterUserRequest;
 import com.example.taskmanager.services.UserService;
+import jakarta.validation.Valid;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -34,8 +36,8 @@ public class UserController {
     }
 
     @PostMapping
-    public User createUser(@RequestBody User user) {
-        return userService.createUser(user);
+    public User createUser(@Valid @RequestBody RegisterUserRequest request) {
+        return userService.createUser(request);
     }
 
     @PutMapping("/{id}")
