@@ -9,7 +9,9 @@ import java.util.List;
 import java.util.Optional;
 
 @RestController
+@RequestMapping("/users")
 public class UserController {
+
     private final UserService userService;
 
     public UserController(UserService userService) {
@@ -21,20 +23,19 @@ public class UserController {
         return userService.getAllUsers();
     }
 
-    @GetMapping
-    public Optional<User> getUserById(@RequestParam Long id){
+    @GetMapping("/{id}")
+    public Optional<User> getUserById(@PathVariable Long id) {
         return userService.getUserById(id);
     }
 
-    @GetMapping
-    public Optional<User> getUserByEmail(@RequestParam String email){
+    @GetMapping("/email")
+    public Optional<User> getUserByEmail(@RequestParam String email) {
         return userService.getUserByEmail(email);
-
     }
 
     @PostMapping
-    public void createUser(@RequestBody User user) {
-        userService.createUser(user);
+    public User createUser(@RequestBody User user) {
+        return userService.createUser(user);
     }
 
     @PutMapping("/{id}")
