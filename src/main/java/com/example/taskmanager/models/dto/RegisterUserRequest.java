@@ -4,25 +4,31 @@ package com.example.taskmanager.models.dto;
 import jakarta.persistence.Column;
 import jakarta.validation.constraints.Email;
 import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.Pattern;
 import jakarta.validation.constraints.Size;
 
 public class RegisterUserRequest {
 
-    @NotBlank
-    @Size(min = 3, max = 10)
+    @NotBlank(message = "Name is required")
+    @Size(min = 3, max = 12, message = "Name must be between 3 and 12 characters")
     private String name;
 
-    @NotBlank
-    @Size(min = 3, max = 10)
+    @NotBlank(message = "Surname is required")
+    @Size(min = 3, max = 10, message = "Surname must be between 3 and 10 characters")
     private String surname;
 
     @Email
-    @NotBlank
-    @Size(min = 3, max = 50)
+    @NotBlank(message = "Email is required")
+    @Size(min = 3, max = 30, message = "Your emails must be between 3 and 30 characters")
     private String email;
 
-    @NotBlank
-    @Size(min = 6, max = 100)
+    @NotBlank(message = "Password is required")
+    @Size(min = 6, max = 10, message = "Your password must be between 6 and 10 characters")
+    @Pattern(
+            regexp = "^(?=.*[a-z])(?=.*[A-Z])(?=.*\\d)(?=.*[@#$%^&+=!]).*$",
+            message = "Password must contain at least one uppercase letter, one lowercase letter, one number and one special character"
+    )
+
     private String password;
 
     public RegisterUserRequest() {
