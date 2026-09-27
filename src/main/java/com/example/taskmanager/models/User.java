@@ -9,11 +9,9 @@ import org.springframework.security.core.GrantedAuthority;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.userdetails.UserDetails;
 
-import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.List;
-import java.util.Optional;
 
 @Entity
 @Table(name = "users")
@@ -24,7 +22,7 @@ public class User implements UserDetails {
     private Long id;
 
     @NotBlank
-    @Size(min = 3, max = 10)
+    @Size(min = 3, max = 12)
     @Column(nullable = false)
     private String name;
 
@@ -48,9 +46,12 @@ public class User implements UserDetails {
     @Column(nullable = false)
     private Role role;
 
+    @Column(updatable = false)
+    private LocalDateTime joinDate;
+
     @PrePersist
     protected void onCreate() {
-        LocalDateTime joinDate = LocalDateTime.now();
+        joinDate = LocalDateTime.now();
     }
 
     public User() {
@@ -88,10 +89,6 @@ public class User implements UserDetails {
         this.email = email;
     }
 
-//    public String getPassword() {
-//        return password;
-//    }
-
     public void setPassword(String password) {
         this.password = password;
     }
@@ -105,16 +102,16 @@ public class User implements UserDetails {
     }
 
     public LocalDateTime getJoinDate() {
-        return getJoinDate();
+        return joinDate;
     }
 
     public void setJoinDate(LocalDateTime joinDate) {
-        this.setJoinDate(joinDate);
+        this.joinDate = joinDate;
     }
 
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority("ROLE_USER"));
+        return List.of(new SimpleGrantedAuthority("ROLE_" + role.name()));
     }
 
     @Override
