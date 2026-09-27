@@ -27,7 +27,7 @@ public class Task {
 
     @NotBlank
     @Size(max = 500)
-    @Column(nullable = false)
+    @Column(nullable = false, length = 500)
     private String description;
 
     @NotNull
@@ -45,6 +45,18 @@ public class Task {
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;
+
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "owner_id")
+    private User owner;
+
+    public User getOwner() {
+        return owner;
+    }
+
+    public void setOwner(User owner) {
+        this.owner = owner;
+    }
 
     public Task() {
     }
