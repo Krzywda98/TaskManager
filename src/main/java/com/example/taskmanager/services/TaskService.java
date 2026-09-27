@@ -6,13 +6,17 @@ import com.example.taskmanager.models.Task;
 import com.example.taskmanager.models.User;
 import com.example.taskmanager.models.dto.TaskRequest;
 import com.example.taskmanager.models.dto.TaskResponse;
+import com.example.taskmanager.models.dto.TaskPageResponse;
+import com.example.taskmanager.models.enums.TaskStatus;
+import com.example.taskmanager.models.enums.TaskPriority;
+import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 import com.example.taskmanager.repositories.TaskRepository;
 import com.example.taskmanager.repositories.UserRepository;
 import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.List;
 import java.util.Objects;
 
 @Service
@@ -28,11 +32,19 @@ public class TaskService {
         this.currentUser = currentUser;
     }
 
-    public List<TaskResponse> getAllTasks() {
+    public TaskPageResponse getAllTasks(TaskStatus status, TaskPriority priority, Pageable pageable) {
         User actor = currentUser.get();
-        List<Task> tasks = currentUser.isAdmin(actor)
-                ? taskRepository.findAll() : taskRepository.findByOwner_Id(actor.getId());
-        return tasks.stream().map(TaskResponse::from).toList();
+        Specification<Task> filter = (root, query, cb) -> cb.conjunction();
+        if (!currentUser.isAdmin(actor)) {
+            filter = filter.and((root, query, cb) -> cb.equal(root.get("owner").get("id"), actor.getId()));
+        }
+        if (status != null) {
+            filter = filter.and((root, query, cb) -> cb.equal(root.get("status"), status));
+        }
+        if (priority != null) {
+            filter = filter.and((root, query, cb) -> cb.equal(root.get("priority"), priority));
+        }
+        return TaskPageResponse.from(taskRepository.findAll(filter, pageable).map(TaskResponse::from));
     }
 
     public TaskResponse getTaskById(Long id) {

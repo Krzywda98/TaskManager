@@ -2,10 +2,8 @@ package com.example.taskmanager.repositories;
 
 import com.example.taskmanager.models.Task;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
 
-import java.util.List;
-
-public interface TaskRepository extends JpaRepository<Task, Long> {
-    List<Task> findByOwner_Id(Long ownerId);
+public interface TaskRepository extends JpaRepository<Task, Long>, JpaSpecificationExecutor<Task> {
     void deleteByOwner_Id(Long ownerId);
 }
