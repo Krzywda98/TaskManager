@@ -77,6 +77,13 @@ public class TaskService {
         return TaskResponse.from(taskRepository.saveAndFlush(task));
     }
 
+    @Transactional
+    public TaskResponse updateTaskStatus(Long id, TaskStatus status) {
+        Task task = findAccessibleTask(id, currentUser.get());
+        task.setStatus(status);
+        return TaskResponse.from(taskRepository.saveAndFlush(task));
+    }
+
     private Task findAccessibleTask(Long id, User actor) {
         Task task = taskRepository.findById(id)
                 .orElseThrow(() -> new TaskNotFoundException("Task not found"));

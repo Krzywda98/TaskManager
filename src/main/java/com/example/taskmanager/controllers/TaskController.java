@@ -1,6 +1,7 @@
 package com.example.taskmanager.controllers;
 
 import com.example.taskmanager.models.dto.TaskRequest;
+import com.example.taskmanager.models.dto.UpdateTaskStatusRequest;
 import com.example.taskmanager.models.dto.TaskResponse;
 import com.example.taskmanager.models.dto.TaskPageResponse;
 import com.example.taskmanager.models.dto.ErrorResponse;
@@ -70,5 +71,12 @@ public class TaskController {
     @PutMapping("/{id}")
     public TaskResponse updateTask(@PathVariable Long id, @Valid @RequestBody TaskRequest request) {
         return taskService.updateTask(id, request);
+    }
+
+    @PatchMapping("/{id}/status")
+    public TaskResponse updateTaskStatus(
+            @PathVariable Long id,
+            @Valid @RequestBody UpdateTaskStatusRequest request) {
+        return taskService.updateTaskStatus(id, request.status());
     }
 }

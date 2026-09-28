@@ -436,6 +436,105 @@ class ApiIntegrationTests {
         }
     }
 
+    @Test
+    void ownerCanChangeTaskStatusWithoutChangingOtherFields() throws Exception {
+        aliceTask.setDeadline(java.time.LocalDate.of(2030, 1, 1));
+        tasks.saveAndFlush(aliceTask);
+        Task before = tasks.findById(aliceTask.getId()).orElseThrow();
+
+        mvc.perform(patch("/tasks/{id}/status", aliceTask.getId()).with(httpBasic(alice.getEmail(), PASSWORD))
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"IN_PROGRESS\"}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(aliceTask.getId()))
+                .andExpect(jsonPath("$.status").value("IN_PROGRESS"))
+                .andExpect(jsonPath("$.title").value(before.getTitle()))
+                .andExpect(jsonPath("$.description").value(before.getDescription()))
+                .andExpect(jsonPath("$.priority").value("MEDIUM"))
+                .andExpect(jsonPath("$.deadline").value("2030-01-01"))
+                .andExpect(jsonPath("$.ownerId").value(alice.getId()));
+
+        Task updated = tasks.findById(aliceTask.getId()).orElseThrow();
+        assertThat(updated.getStatus()).isEqualTo(TaskStatus.IN_PROGRESS);
+        assertThat(updated.getTitle()).isEqualTo(before.getTitle());
+        assertThat(updated.getDescription()).isEqualTo(before.getDescription());
+        assertThat(updated.getPriority()).isEqualTo(before.getPriority());
+        assertThat(updated.getDeadline()).isEqualTo(before.getDeadline());
+        assertThat(updated.getOwner().getId()).isEqualTo(alice.getId());
+        assertThat(updated.getCreatedAt()).isEqualTo(before.getCreatedAt());
+        assertThat(updated.getUpdatedAt()).isAfter(before.getUpdatedAt());
+    }
+
+    @Test
+    void adminCanChangeStatusOfOwnedAndUnassignedTasks() throws Exception {
+        for (Task task : new Task[]{bobTask, legacyTask}) {
+            mvc.perform(patch("/tasks/{id}/status", task.getId()).with(httpBasic(admin.getEmail(), PASSWORD))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isOk())
+                    .andExpect(jsonPath("$.id").value(task.getId()))
+                    .andExpect(jsonPath("$.status").value("COMPLETED"));
+            assertThat(tasks.findById(task.getId()).orElseThrow().getStatus()).isEqualTo(TaskStatus.COMPLETED);
+        }
+        assertThat(tasks.findById(bobTask.getId()).orElseThrow().getOwner().getId()).isEqualTo(bob.getId());
+        assertThat(tasks.findById(legacyTask.getId()).orElseThrow().getOwner()).isNull();
+    }
+
+    @Test
+    void userCannotChangeStatusOfOthersOrUnassignedTasks() throws Exception {
+        for (Task task : new Task[]{bobTask, legacyTask}) {
+            Task before = tasks.findById(task.getId()).orElseThrow();
+            mvc.perform(patch("/tasks/{id}/status", task.getId()).with(httpBasic(alice.getEmail(), PASSWORD))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isForbidden());
+            Task unchanged = tasks.findById(task.getId()).orElseThrow();
+            assertThat(unchanged.getStatus()).isEqualTo(before.getStatus());
+            assertThat(unchanged.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+        }
+    }
+
+    @Test
+    void taskStatusChangeRequiresAuthentication() throws Exception {
+        Task before = tasks.findById(aliceTask.getId()).orElseThrow();
+        mvc.perform(patch("/tasks/{id}/status", aliceTask.getId())
+                        .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"COMPLETED\"}"))
+                .andExpect(status().isUnauthorized());
+        Task unchanged = tasks.findById(aliceTask.getId()).orElseThrow();
+        assertThat(unchanged.getStatus()).isEqualTo(before.getStatus());
+        assertThat(unchanged.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+    }
+
+    @Test
+    void changingStatusOfMissingTaskReturns404() throws Exception {
+        for (User actor : new User[]{alice, admin}) {
+            mvc.perform(patch("/tasks/999999/status").with(httpBasic(actor.getEmail(), PASSWORD))
+                            .contentType(MediaType.APPLICATION_JSON).content("{\"status\":\"COMPLETED\"}"))
+                    .andExpect(status().isNotFound())
+                    .andExpect(jsonPath("$.message").value("Task not found"));
+        }
+        assertThat(tasks.count()).isEqualTo(3);
+    }
+
+    @Test
+    void invalidStatusChangesReturn400WithoutModifyingTask() throws Exception {
+        String[] invalidBodies = {
+                "{}", "{\"status\":null}", "{\"status\":\"INVALID\"}",
+                "{\"status\":\"COMPLETED\",\"title\":\"Injected\"}",
+                "{\"status\":\"COMPLETED\",\"ownerId\":" + bob.getId() + "}"
+        };
+        Task before = tasks.findById(aliceTask.getId()).orElseThrow();
+        for (String body : invalidBodies) {
+            mvc.perform(patch("/tasks/{id}/status", aliceTask.getId()).with(httpBasic(alice.getEmail(), PASSWORD))
+                            .contentType(MediaType.APPLICATION_JSON).content(body))
+                    .andExpect(status().isBadRequest())
+                    .andExpect(jsonPath("$.message").isNotEmpty())
+                    .andExpect(jsonPath("$.errors").isMap());
+            Task unchanged = tasks.findById(aliceTask.getId()).orElseThrow();
+            assertThat(unchanged.getStatus()).isEqualTo(before.getStatus());
+            assertThat(unchanged.getTitle()).isEqualTo(before.getTitle());
+            assertThat(unchanged.getOwner().getId()).isEqualTo(alice.getId());
+            assertThat(unchanged.getUpdatedAt()).isEqualTo(before.getUpdatedAt());
+        }
+    }
+
     private User createUser(String email, Role role) {
         User user = new User();
         user.setName("Alicja");
