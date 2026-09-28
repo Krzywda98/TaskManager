@@ -17,6 +17,8 @@ import org.springframework.security.access.AccessDeniedException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
+import java.util.Locale;
 import java.util.Objects;
 
 @Service
@@ -33,6 +35,11 @@ public class TaskService {
     }
 
     public TaskPageResponse getAllTasks(TaskStatus status, TaskPriority priority, Pageable pageable) {
+        return getAllTasks(status, priority, null, null, null, pageable);
+    }
+
+    public TaskPageResponse getAllTasks(TaskStatus status, TaskPriority priority, String title,
+                                        LocalDate deadlineFrom, LocalDate deadlineTo, Pageable pageable) {
         User actor = currentUser.get();
         Specification<Task> filter = (root, query, cb) -> cb.conjunction();
         if (!currentUser.isAdmin(actor)) {
@@ -43,6 +50,17 @@ public class TaskService {
         }
         if (priority != null) {
             filter = filter.and((root, query, cb) -> cb.equal(root.get("priority"), priority));
+        }
+        if (title != null && !title.isBlank()) {
+            String pattern = "%" + title.strip().toLowerCase(Locale.ROOT)
+                    .replace("!", "!!").replace("%", "!%").replace("_", "!_") + "%";
+            filter = filter.and((root, query, cb) -> cb.like(cb.lower(root.get("title")), pattern, '!'));
+        }
+        if (deadlineFrom != null) {
+            filter = filter.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("deadline"), deadlineFrom));
+        }
+        if (deadlineTo != null) {
+            filter = filter.and((root, query, cb) -> cb.lessThanOrEqualTo(root.get("deadline"), deadlineTo));
         }
         return TaskPageResponse.from(taskRepository.findAll(filter, pageable).map(TaskResponse::from));
     }

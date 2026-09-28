@@ -9,12 +9,14 @@ import com.example.taskmanager.models.enums.TaskStatus;
 import com.example.taskmanager.models.enums.TaskPriority;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Sort;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import com.example.taskmanager.services.TaskService;
 import jakarta.validation.Valid;
 import org.springframework.http.HttpStatus;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDate;
 import java.util.Set;
 
 @RestController
@@ -31,11 +33,17 @@ public class TaskController {
     public ResponseEntity<?> getAllTasks(
             @RequestParam(required = false) TaskStatus status,
             @RequestParam(required = false) TaskPriority priority,
+            @RequestParam(required = false) String title,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineFrom,
+            @RequestParam(required = false) @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate deadlineTo,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(defaultValue = "20") int size,
             @RequestParam(defaultValue = "id,asc") String sort) {
         if (page < 0 || size < 1 || size > 100) {
             return ResponseEntity.badRequest().body(new ErrorResponse("page must be >= 0 and size between 1 and 100"));
+        }
+        if (deadlineFrom != null && deadlineTo != null && deadlineFrom.isAfter(deadlineTo)) {
+            return ResponseEntity.badRequest().body(new ErrorResponse("deadlineFrom must be on or before deadlineTo"));
         }
         String[] parts = sort.split(",", -1);
         if (parts.length != 2 || !SORT_FIELDS.contains(parts[0])
@@ -47,7 +55,8 @@ public class TaskController {
         if (!parts[0].equals("id")) {
             ordering = ordering.and(Sort.by("id"));
         }
-        TaskPageResponse result = taskService.getAllTasks(status, priority, PageRequest.of(page, size, ordering));
+        TaskPageResponse result = taskService.getAllTasks(status, priority, title, deadlineFrom, deadlineTo,
+                PageRequest.of(page, size, ordering));
         return ResponseEntity.ok(result);
     }
 

@@ -535,6 +535,142 @@ class ApiIntegrationTests {
         }
     }
 
+    @Test
+    void titleSearchMatchesFragmentsIgnoringCaseAndSurroundingWhitespace() throws Exception {
+        mvc.perform(get("/tasks").param("title", "  LiCe Ta  ").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()));
+        mvc.perform(get("/tasks").param("title", "Bob").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0));
+        mvc.perform(get("/tasks").param("title", "Bob").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(bobTask.getId()));
+        mvc.perform(get("/tasks").param("title", "no matching title").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)));
+    }
+
+    @Test
+    void blankTitleDoesNotFilterTasks() throws Exception {
+        for (String title : new String[]{"", "   "}) {
+            mvc.perform(get("/tasks").param("title", title).with(httpBasic(admin.getEmail(), PASSWORD)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(3));
+            mvc.perform(get("/tasks").param("title", title).with(httpBasic(alice.getEmail(), PASSWORD)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()));
+        }
+    }
+
+    @Test
+    void titleSearchTreatsSqlWildcardsAndEscapeCharacterLiterally() throws Exception {
+        Task percent = createTask("Progress 100%", alice);
+        Task underscore = createTask("Release_v2", alice);
+        Task exclamation = createTask("Important!", alice);
+        Task combined = createTask("Literal !%_ token", alice);
+        createTask("Progress 1000", alice);
+        createTask("ReleaseXv2", alice);
+        String[] queries = {"100%", "Release_", "Important!", "!%_"};
+        Task[] expected = {percent, underscore, exclamation, combined};
+        for (int i = 0; i < queries.length; i++) {
+            mvc.perform(get("/tasks").param("title", queries[i]).with(httpBasic(alice.getEmail(), PASSWORD)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                    .andExpect(jsonPath("$.content[0].id").value(expected[i].getId()));
+        }
+    }
+
+    @Test
+    void deadlineRangeIncludesBothBoundariesAndExcludesUndatedTasks() throws Exception {
+        Task start = createDatedTask("Start", alice, "2030-01-10");
+        Task end = createDatedTask("End", alice, "2030-01-20");
+        createDatedTask("Before", alice, "2030-01-09");
+        createDatedTask("After", alice, "2030-01-21");
+        mvc.perform(get("/tasks").param("deadlineFrom", "2030-01-10").param("deadlineTo", "2030-01-20")
+                        .with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].id").value(start.getId()))
+                .andExpect(jsonPath("$.content[1].id").value(end.getId()));
+        mvc.perform(get("/tasks").param("deadlineFrom", "2030-01-10").param("deadlineTo", "2030-01-10")
+                        .with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.content[0].id").value(start.getId()));
+        mvc.perform(get("/tasks").param("deadlineFrom", "2031-01-01").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)));
+    }
+
+    @Test
+    void deadlineFiltersSupportEitherBoundaryIndependently() throws Exception {
+        Task earlier = createDatedTask("Earlier", alice, "2030-01-09");
+        Task boundary = createDatedTask("Boundary", alice, "2030-01-10");
+        Task later = createDatedTask("Later", alice, "2030-01-11");
+        mvc.perform(get("/tasks").param("deadlineFrom", "2030-01-10").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].id").value(boundary.getId()))
+                .andExpect(jsonPath("$.content[1].id").value(later.getId()));
+        mvc.perform(get("/tasks").param("deadlineTo", "2030-01-10").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.content[0].id").value(earlier.getId()))
+                .andExpect(jsonPath("$.content[1].id").value(boundary.getId()));
+    }
+
+    @Test
+    void searchFiltersCombineWithPermissionsStatusPrioritySortingAndPagination() throws Exception {
+        Task first = createDatedTask("Search A", alice, "2030-01-10");
+        Task second = createDatedTask("Search B", alice, "2030-01-20");
+        createDatedTask("Search C", bob, "2030-01-15");
+        Task unassigned = createDatedTask("Search D", null, "2030-01-15");
+        createDatedTask("Different title", alice, "2030-01-15");
+        createDatedTask("Search outside", alice, "2030-02-01");
+        createTask("Search undated", alice);
+        Task completed = createDatedTask("Search completed", alice, "2030-01-15");
+        completed.setStatus(TaskStatus.COMPLETED);
+        tasks.saveAndFlush(completed);
+        Task high = createDatedTask("Search high", alice, "2030-01-15");
+        high.setPriority(TaskPriority.HIGH);
+        tasks.saveAndFlush(high);
+
+        for (int page = 0; page < 2; page++) {
+            mvc.perform(get("/tasks").param("title", "search").param("status", "TODO").param("priority", "MEDIUM")
+                            .param("deadlineFrom", "2030-01-10").param("deadlineTo", "2030-01-20")
+                            .param("sort", "title,desc").param("size", "1").param("page", String.valueOf(page))
+                            .with(httpBasic(alice.getEmail(), PASSWORD)))
+                    .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(1)))
+                    .andExpect(jsonPath("$.content[0].id").value(page == 0 ? second.getId() : first.getId()))
+                    .andExpect(jsonPath("$.totalElements").value(2))
+                    .andExpect(jsonPath("$.totalPages").value(2)).andExpect(jsonPath("$.page").value(page));
+        }
+        mvc.perform(get("/tasks").param("title", "search").param("status", "TODO").param("priority", "MEDIUM")
+                        .param("deadlineFrom", "2030-01-10").param("deadlineTo", "2030-01-20")
+                        .param("sort", "title,desc").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(4)))
+                .andExpect(jsonPath("$.totalElements").value(4))
+                .andExpect(jsonPath("$.content[0].id").value(unassigned.getId()));
+        mvc.perform(get("/tasks").param("title", "search").param("deadlineFrom", "2030-01-10"))
+                .andExpect(status().isUnauthorized());
+    }
+
+    @Test
+    void invalidDeadlineDatesAndReversedRangeReturn400() throws Exception {
+        for (String parameter : new String[]{"deadlineFrom", "deadlineTo"}) {
+            for (String value : new String[]{"invalid", "10/01/2030", "2030-02-30", "2030-13-01"}) {
+                mvc.perform(get("/tasks").param(parameter, value).with(httpBasic(alice.getEmail(), PASSWORD)))
+                        .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").isNotEmpty())
+                        .andExpect(jsonPath("$.errors").isMap());
+            }
+        }
+        mvc.perform(get("/tasks").param("deadlineFrom", "2030-01-20").param("deadlineTo", "2030-01-10")
+                        .with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.message").value("deadlineFrom must be on or before deadlineTo"))
+                .andExpect(jsonPath("$.errors").isMap());
+    }
+
+    private Task createDatedTask(String title, User owner, String deadline) {
+        Task task = createTask(title, owner);
+        task.setDeadline(java.time.LocalDate.parse(deadline));
+        return tasks.saveAndFlush(task);
+    }
+
     private User createUser(String email, Role role) {
         User user = new User();
         user.setName("Alicja");
