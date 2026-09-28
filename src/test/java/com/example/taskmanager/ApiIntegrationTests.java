@@ -220,10 +220,14 @@ class ApiIntegrationTests {
     @Test
     void taskListsAndDetailsRespectOwnership() throws Exception {
         mvc.perform(get("/tasks").with(httpBasic(alice.getEmail(), PASSWORD)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(1)))
-                .andExpect(jsonPath("$[0].id").value(aliceTask.getId()))
-                .andExpect(jsonPath("$[0].ownerId").value(alice.getId()))
-                .andExpect(jsonPath("$[0].owner").doesNotExist());
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()))
+                .andExpect(jsonPath("$.content[0].ownerId").value(alice.getId()))
+                .andExpect(jsonPath("$.content[0].owner").doesNotExist())
+                .andExpect(jsonPath("$.page").value(0))
+                .andExpect(jsonPath("$.size").value(20))
+                .andExpect(jsonPath("$.totalElements").value(1))
+                .andExpect(jsonPath("$.totalPages").value(1));
         mvc.perform(get("/tasks/{id}", aliceTask.getId()).with(httpBasic(alice.getEmail(), PASSWORD)))
                 .andExpect(status().isOk()).andExpect(jsonPath("$.id").value(aliceTask.getId()));
         mvc.perform(get("/tasks/{id}", bobTask.getId()).with(httpBasic(alice.getEmail(), PASSWORD)))
@@ -267,7 +271,8 @@ class ApiIntegrationTests {
     @Test
     void adminCanManageAllTasksIncludingUnassignedOnes() throws Exception {
         mvc.perform(get("/tasks").with(httpBasic(admin.getEmail(), PASSWORD)))
-                .andExpect(status().isOk()).andExpect(jsonPath("$", hasSize(3)));
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(3)))
+                .andExpect(jsonPath("$.totalElements").value(3));
         mvc.perform(get("/tasks/{id}", bobTask.getId()).with(httpBasic(admin.getEmail(), PASSWORD)))
                 .andExpect(status().isOk());
         mvc.perform(get("/tasks/{id}", legacyTask.getId()).with(httpBasic(admin.getEmail(), PASSWORD)))
@@ -349,6 +354,86 @@ class ApiIntegrationTests {
         mvc.perform(post("/tasks").with(httpBasic(alice.getEmail(), PASSWORD))
                 .contentType(MediaType.APPLICATION_JSON).content(taskBody("Invalid enum", null).replace("TODO", "INVALID")))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void taskFiltersCombineAndRespectOwnershipAndAdminAccess() throws Exception {
+        aliceTask.setPriority(TaskPriority.HIGH);
+        tasks.saveAndFlush(aliceTask);
+        bobTask.setPriority(TaskPriority.HIGH);
+        tasks.saveAndFlush(bobTask);
+        Task completed = createTask("Completed Alice task", alice);
+        completed.setStatus(TaskStatus.COMPLETED);
+        completed.setPriority(TaskPriority.HIGH);
+        tasks.saveAndFlush(completed);
+        createTask("Medium Alice task", alice);
+
+        mvc.perform(get("/tasks").param("status", "TODO").param("priority", "HIGH")
+                        .with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()))
+                .andExpect(jsonPath("$.totalElements").value(1));
+        mvc.perform(get("/tasks").param("status", "TODO").param("priority", "HIGH")
+                        .param("size", "1").param("page", "1").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(bobTask.getId()))
+                .andExpect(jsonPath("$.totalElements").value(2))
+                .andExpect(jsonPath("$.totalPages").value(2));
+        mvc.perform(get("/tasks").param("status", "TODO").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get("/tasks").param("priority", "HIGH").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.totalElements").value(2));
+        mvc.perform(get("/tasks").param("status", "IN_PROGRESS").with(httpBasic(alice.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(0))
+                .andExpect(jsonPath("$.totalPages").value(0));
+    }
+
+    @Test
+    void taskPagesSupportSortingAndOutOfRangePages() throws Exception {
+        mvc.perform(get("/tasks").param("size", "2").param("sort", "title,desc")
+                        .with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(2)))
+                .andExpect(jsonPath("$.content[0].id").value(legacyTask.getId()))
+                .andExpect(jsonPath("$.content[1].id").value(bobTask.getId()))
+                .andExpect(jsonPath("$.totalElements").value(3))
+                .andExpect(jsonPath("$.totalPages").value(2));
+        mvc.perform(get("/tasks").param("size", "2").param("page", "1").param("sort", "title,desc")
+                        .with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(1)))
+                .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()))
+                .andExpect(jsonPath("$.page").value(1));
+        mvc.perform(get("/tasks").param("page", "20").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content", hasSize(0)))
+                .andExpect(jsonPath("$.totalElements").value(3));
+        mvc.perform(get("/tasks").param("size", "100").with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.size").value(100))
+                .andExpect(jsonPath("$.content[0].id").value(aliceTask.getId()));
+    }
+
+    @Test
+    void deadlineSortingUsesIdToBreakTies() throws Exception {
+        for (Task task : new Task[]{aliceTask, bobTask, legacyTask}) {
+            task.setDeadline(java.time.LocalDate.of(2030, 1, 1));
+            tasks.saveAndFlush(task);
+        }
+        mvc.perform(get("/tasks").param("sort", "deadline,asc").param("size", "1").param("page", "1")
+                        .with(httpBasic(admin.getEmail(), PASSWORD)))
+                .andExpect(status().isOk()).andExpect(jsonPath("$.content[0].id").value(bobTask.getId()));
+    }
+
+    @Test
+    void invalidTaskListParametersReturn400() throws Exception {
+        String[][] invalidParameters = {
+                {"page", "-1"}, {"page", "abc"}, {"size", "0"}, {"size", "101"},
+                {"size", "-1"}, {"size", "abc"}, {"status", "INVALID"}, {"priority", "INVALID"},
+                {"sort", "owner.password,asc"}, {"sort", "missing,asc"}, {"sort", "id,wrong"},
+                {"sort", "id"}, {"sort", "id,asc,extra"}, {"sort", "id,"}
+        };
+        for (String[] parameter : invalidParameters) {
+            mvc.perform(get("/tasks").param(parameter[0], parameter[1]).with(httpBasic(alice.getEmail(), PASSWORD)))
+                    .andExpect(status().isBadRequest()).andExpect(jsonPath("$.message").isNotEmpty())
+                    .andExpect(jsonPath("$.errors").isMap());
+        }
     }
 
     private User createUser(String email, Role role) {
