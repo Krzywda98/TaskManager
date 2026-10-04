@@ -24,6 +24,7 @@ Screenshots are browser-rendered request/response reports captured from the runn
 - [Testing and CI](#testing-and-ci)
 - [Project structure](#project-structure)
 - [Troubleshooting](#troubleshooting)
+- [License](#license)
 
 ## Features
 
@@ -496,3 +497,7 @@ pom.xml                    Dependencies and build configuration
 | Root URL shows no webpage | This is a REST API. Call `/users` or `/tasks` with the correct method and authentication. |
 
 References: [Spring Boot configuration](https://docs.spring.io/spring-boot/reference/features/external-config.html), [IntelliJ run configurations](https://www.jetbrains.com/help/idea/run-debug-configuration-spring-boot.html), [Docker PostgreSQL guide](https://docs.docker.com/guides/postgresql/).
+
+## License
+
+Licensed under the [MIT License](LICENSE). Copyright (c) 2026 Krzywda98.
